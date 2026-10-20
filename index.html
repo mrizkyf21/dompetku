@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="id" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="google" content="notranslate">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dompetku</title>
+  <meta name="description" content="Pencatat keuangan pribadi">
+  <meta name="theme-color" content="#0f9d58">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Dompetku">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Dompetku</h1>
+    <div class="month-nav">
+      <button id="prevMonth" aria-label="Bulan sebelumnya">‹</button>
+      <span id="monthLabel"></span>
+      <button id="nextMonth" aria-label="Bulan berikutnya">›</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Ringkasan -->
+    <section id="view-home" class="view active">
+      <div class="card balance">
+        <div class="label">Saldo bulan ini</div>
+        <div id="balance" class="amount">Rp0</div>
+        <div class="split">
+          <div><span class="label">Pemasukan</span><span id="totalIncome" class="income">Rp0</span></div>
+          <div><span class="label">Pengeluaran</span><span id="totalExpense" class="expense">Rp0</span></div>
+        </div>
+        <div class="label small">Saldo total semua waktu: <strong id="allTimeBalance">Rp0</strong></div>
+      </div>
+
+      <h2>Transaksi</h2>
+      <ul id="txList" class="tx-list"></ul>
+      <p id="emptyMsg" class="empty">Belum ada transaksi bulan ini.<br>Ketuk tombol <strong>+</strong> untuk menambah.</p>
+    </section>
+
+    <!-- Laporan -->
+    <section id="view-report" class="view">
+      <h2>Pengeluaran per kategori</h2>
+      <div id="expenseBreakdown" class="breakdown"></div>
+      <h2>Pemasukan per kategori</h2>
+      <div id="incomeBreakdown" class="breakdown"></div>
+    </section>
+
+    <!-- Pengaturan -->
+    <section id="view-settings" class="view">
+      <h2>Data</h2>
+      <div class="card stack">
+        <button id="exportCsv" class="btn">Ekspor CSV (Excel)</button>
+        <button id="exportJson" class="btn">Cadangkan data (JSON)</button>
+        <label class="btn">
+          Pulihkan dari cadangan
+          <input id="importJson" type="file" accept="application/json,.json" hidden>
+        </label>
+        <button id="clearAll" class="btn danger">Hapus semua data</button>
+      </div>
+      <p class="note">Data hanya tersimpan di perangkat ini. Rutinlah membuat cadangan.</p>
+      <div id="installBox" class="card stack" hidden>
+        <button id="installBtn" class="btn primary">Pasang aplikasi ke layar utama</button>
+      </div>
+    </section>
+  </main>
+
+  <button id="fab" class="fab" aria-label="Tambah transaksi">+</button>
+
+  <nav class="bottombar">
+    <button data-view="home" class="active">🏠<span>Beranda</span></button>
+    <button data-view="report">📊<span>Laporan</span></button>
+    <button data-view="settings">⚙️<span>Pengaturan</span></button>
+  </nav>
+
+  <!-- Form transaksi -->
+  <dialog id="txDialog">
+    <form id="txForm" method="dialog">
+      <h2 id="formTitle">Tambah transaksi</h2>
+      <div class="type-toggle">
+        <input type="radio" name="type" id="typeExpense" value="expense" checked>
+        <label for="typeExpense">Pengeluaran</label>
+        <input type="radio" name="type" id="typeIncome" value="income">
+        <label for="typeIncome">Pemasukan</label>
+      </div>
+      <label>Jumlah (Rp)
+        <input id="amount" name="amount" inputmode="numeric" autocomplete="off" required placeholder="0">
+      </label>
+      <label>Kategori
+        <select id="category" name="category"></select>
+      </label>
+      <label>Tanggal
+        <input id="date" name="date" type="date" required>
+      </label>
+      <label>Catatan
+        <input id="note" name="note" maxlength="100" placeholder="Opsional">
+      </label>
+      <div class="form-actions">
+        <button type="button" id="deleteTx" class="btn danger" hidden>Hapus</button>
+        <span class="spacer"></span>
+        <button type="button" id="cancelTx" class="btn">Batal</button>
+        <button type="submit" class="btn primary">Simpan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
