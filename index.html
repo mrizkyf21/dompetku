@@ -53,15 +53,36 @@
 
     <!-- Pengaturan -->
     <section id="view-settings" class="view">
-      <h2>Data</h2>
+      <h2>Kategori</h2>
+      <div class="card">
+        <button id="openCategories" class="btn">🏷️ Atur kategori</button>
+      </div>
+
+      <h2>Ekspor laporan (CSV)</h2>
+      <div class="card">
+        <p class="note">Semua transaksi dalam bentuk tabel, bisa dibuka di Excel atau Google Sheets.</p>
+        <div class="btn-row">
+          <button class="btn share-btn" data-action="csv-share">📤 Kirim / Bagikan</button>
+          <button class="btn" data-action="csv-save">💾 Simpan ke HP</button>
+        </div>
+      </div>
+
+      <h2>Cadangan data</h2>
       <div class="card stack">
-        <button id="exportCsv" class="btn">Ekspor CSV (Excel)</button>
-        <button id="exportJson" class="btn">Cadangkan data (JSON)</button>
+        <p class="note">Salinan semua transaksi dan kategori. Kirim ke email atau Google Drive agar aman jika HP hilang atau ganti HP.</p>
+        <div class="btn-row">
+          <button class="btn share-btn" data-action="backup-share">📤 Kirim / Bagikan</button>
+          <button class="btn" data-action="backup-save">💾 Simpan ke HP</button>
+        </div>
         <label class="btn">
-          Pulihkan dari cadangan
-          <input id="importJson" type="file" accept="application/json,.json" hidden>
+          📥 Pulihkan dari file cadangan
+          <input id="importJson" type="file" accept="application/json,.json,text/plain,.txt" hidden>
         </label>
-        <button id="clearAll" class="btn danger">Hapus semua data</button>
+      </div>
+
+      <h2>Lainnya</h2>
+      <div class="card">
+        <button id="clearAll" class="btn danger">Hapus semua transaksi</button>
       </div>
       <p class="note">Data hanya tersimpan di perangkat ini. Rutinlah membuat cadangan.</p>
       <div id="installBox" class="card stack" hidden>
@@ -80,7 +101,7 @@
 
   <!-- Form transaksi -->
   <dialog id="txDialog">
-    <form id="txForm" method="dialog">
+    <form id="txForm" class="dialog-body" method="dialog">
       <h2 id="formTitle">Tambah transaksi</h2>
       <div class="type-toggle">
         <input type="radio" name="type" id="typeExpense" value="expense" checked>
@@ -108,6 +129,55 @@
       </div>
     </form>
   </dialog>
+
+  <!-- Daftar kategori -->
+  <dialog id="catDialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2 tabindex="-1" autofocus>Atur kategori</h2>
+        <button type="button" id="closeCat" class="icon-btn" aria-label="Tutup">✕</button>
+      </div>
+      <div class="type-toggle">
+        <input type="radio" name="catType" id="catTypeExpense" value="expense" checked>
+        <label for="catTypeExpense">Pengeluaran</label>
+        <input type="radio" name="catType" id="catTypeIncome" value="income">
+        <label for="catTypeIncome">Pemasukan</label>
+      </div>
+      <ul id="catList" class="cat-list"></ul>
+      <button type="button" id="addCat" class="btn primary">+ Tambah kategori</button>
+    </div>
+  </dialog>
+
+  <!-- Form kategori -->
+  <dialog id="catEditDialog">
+    <form id="catForm" class="dialog-body" method="dialog">
+      <h2 id="catFormTitle" tabindex="-1" autofocus>Tambah kategori</h2>
+      <label>Nama
+        <input id="catName" maxlength="30" autocomplete="off" placeholder="mis. Jajan">
+      </label>
+      <div class="field-label">Ikon</div>
+      <div id="iconGrid" class="icon-grid"></div>
+      <label>Atau ketik emoji lain
+        <input id="catIconCustom" maxlength="8" autocomplete="off" placeholder="mis. 🧋">
+      </label>
+      <p id="catError" class="error" hidden></p>
+      <div id="catDeleteBox" class="delete-box" hidden>
+        <p id="catDeleteMsg"></p>
+        <label id="catMoveLabel">Pindahkan transaksinya ke
+          <select id="catMoveTo"></select>
+        </label>
+        <button type="button" id="confirmDeleteCat" class="btn danger">Ya, hapus kategori</button>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="deleteCat" class="btn danger">Hapus</button>
+        <span class="spacer"></span>
+        <button type="button" id="cancelCat" class="btn">Batal</button>
+        <button type="submit" class="btn primary">Simpan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
 
   <script src="app.js"></script>
 </body>

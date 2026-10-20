@@ -1,5 +1,5 @@
 // Naikkan versi ini setiap kali file aplikasi diubah agar HP mengunduh versi baru
-const CACHE = 'dompetku-v2';
+const CACHE = 'dompetku-v3';
 const FILES = [
   './',
   'index.html',
@@ -22,11 +22,11 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// Utamakan jaringan, pakai cache saat offline
+// Utamakan jaringan (selalu cek versi terbaru ke server), pakai cache saat offline
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    fetch(e.request)
+    fetch(new Request(e.request.url, { cache: 'no-cache' }))
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));

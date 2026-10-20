@@ -7,7 +7,11 @@ Aplikasi pencatat keuangan pribadi berbentuk PWA (Progressive Web App). Bisa dip
 - Catat pemasukan dan pengeluaran dengan kategori, tanggal, dan catatan
 - Ringkasan saldo per bulan dan saldo total
 - Laporan persentase per kategori
-- Ekspor ke CSV (bisa dibuka di Excel) serta cadangkan/pulihkan data (JSON)
+- Atur kategori sendiri: tambah, ubah nama/ikon, urutkan, dan hapus (transaksinya dipindah ke kategori pengganti)
+- Ekspor laporan CSV (bisa dibuka di Excel) dan cadangkan data, masing-masing bisa:
+  - **Kirim / Bagikan** lewat menu Share HP (Gmail, Google Drive, WhatsApp, dll.)
+  - **Simpan ke HP** di folder Download
+- Pulihkan data dari file cadangan (`.json` atau `.txt`, termasuk cadangan versi lama)
 - Mode gelap otomatis mengikuti pengaturan HP
 - Data tersimpan di perangkat (localStorage), tidak dikirim ke server mana pun
 
