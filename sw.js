@@ -1,5 +1,5 @@
 // Naikkan versi ini setiap kali file aplikasi diubah agar HP mengunduh versi baru
-const CACHE = 'dompetku-v5';
+const CACHE = 'dompetku-v7';
 const FILES = [
   './',
   'index.html',
@@ -29,8 +29,11 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     fetch(new Request(e.request.url, { cache: 'no-cache' }))
       .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy));
+        // Hanya simpan jawaban yang berhasil, agar halaman error tidak menimpa salinan offline
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy));
+        }
         return res;
       })
       .catch(() => caches.match(e.request, { ignoreSearch: true }))

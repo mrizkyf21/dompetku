@@ -18,7 +18,12 @@ Aplikasi pencatat keuangan pribadi berbentuk PWA (Progressive Web App). Bisa dip
 - Pulihkan data dari file cadangan (`.json` atau `.txt`, termasuk cadangan versi lama)
 - **Pindai struk (AI):** foto struk belanja, lalu Google Gemini membaca toko, tanggal, total, dan daftar
   barang serta memilih kategori yang cocok. Hasilnya ditampilkan untuk diperiksa sebelum disimpan
-- Mode gelap otomatis mengikuti pengaturan HP
+- **Tampilan bisa diatur sendiri** (Pengaturan → Tampilan), langsung berlaku dan tersimpan otomatis:
+  - Tema: ikuti HP / terang / gelap
+  - Warna aksen: 7 pilihan siap pakai atau warna bebas; warna teks disesuaikan otomatis agar tetap terbaca
+  - Ukuran teks: kecil / normal / besar / sangat besar
+  - Kepadatan: lega / ringkas
+  - Bentuk sudut: membulat / tegas
 
 ## Pindai struk dengan Gemini (gratis)
 

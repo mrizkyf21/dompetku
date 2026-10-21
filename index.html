@@ -14,6 +14,24 @@
   <meta name="apple-mobile-web-app-title" content="Dompetku">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="style.css">
+  <script>
+    // Terapkan tampilan pilihan pengguna sebelum halaman digambar, agar tidak berkedip warna bawaan.
+    // Logikanya sama dengan applyLook() di app.js. Dibungkus fungsi agar tidak membuat variabel
+    // global yang bentrok dengan nama di app.js.
+    (function () {
+      try {
+        var saved = JSON.parse(localStorage.getItem('dompetku.appearance.v1'));
+        if (!saved) return;
+        var root = document.documentElement;
+        if (saved.theme === 'light' || saved.theme === 'dark') root.dataset.theme = saved.theme;
+        if (saved.fontSize) root.style.fontSize = saved.fontSize + 'px';
+        root.classList.toggle('density-compact', saved.density === 'compact');
+        root.classList.toggle('corners-sharp', saved.corners === 'sharp');
+        for (var name in saved.vars) root.style.setProperty(name, saved.vars[name]);
+        if (saved.accent) document.querySelector('meta[name="theme-color"]').content = saved.accent;
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -81,6 +99,47 @@
 
     <!-- Pengaturan -->
     <section id="view-settings" class="view">
+      <h2>🎨 Tampilan</h2>
+      <div class="card stack look">
+        <div class="look-group">
+          <span class="look-label" id="lookThemeLabel">Tema</span>
+          <div class="segmented" data-look="theme" role="group" aria-labelledby="lookThemeLabel">
+            <button type="button" data-value="auto">📱 Ikuti HP</button>
+            <button type="button" data-value="light">☀️ Terang</button>
+            <button type="button" data-value="dark">🌙 Gelap</button>
+          </div>
+        </div>
+        <div class="look-group">
+          <span class="look-label" id="lookAccentLabel">Warna aksen</span>
+          <div id="accentRow" class="accent-row" role="group" aria-labelledby="lookAccentLabel"></div>
+          <p id="accentWarning" class="note" hidden></p>
+        </div>
+        <div class="look-group">
+          <span class="look-label" id="lookSizeLabel">Ukuran teks</span>
+          <div class="segmented" data-look="fontSize" role="group" aria-labelledby="lookSizeLabel">
+            <button type="button" data-value="14"><span class="size-preview" style="font-size:0.85em">A</span> Kecil</button>
+            <button type="button" data-value="16"><span class="size-preview">A</span> Normal</button>
+            <button type="button" data-value="18"><span class="size-preview" style="font-size:1.15em">A</span> Besar</button>
+            <button type="button" data-value="20"><span class="size-preview" style="font-size:1.3em">A</span> Sangat besar</button>
+          </div>
+        </div>
+        <div class="look-group">
+          <span class="look-label" id="lookDensityLabel">Kepadatan</span>
+          <div class="segmented" data-look="density" role="group" aria-labelledby="lookDensityLabel">
+            <button type="button" data-value="comfortable">Lega</button>
+            <button type="button" data-value="compact">Ringkas</button>
+          </div>
+        </div>
+        <div class="look-group">
+          <span class="look-label" id="lookCornerLabel">Bentuk sudut</span>
+          <div class="segmented" data-look="corners" role="group" aria-labelledby="lookCornerLabel">
+            <button type="button" data-value="rounded"><span class="corner-preview rounded" aria-hidden="true"></span>Membulat</button>
+            <button type="button" data-value="sharp"><span class="corner-preview sharp" aria-hidden="true"></span>Tegas</button>
+          </div>
+        </div>
+        <button type="button" id="resetLook" class="link-btn">↺ Kembalikan tampilan bawaan</button>
+      </div>
+
       <h2>Kategori</h2>
       <div class="card">
         <button id="openCategories" class="btn">🏷️ Atur kategori</button>

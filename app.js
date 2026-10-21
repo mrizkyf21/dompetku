@@ -91,7 +91,11 @@ function normalize(cats, txs) {
 
 // ---------- Helpers ----------
 
-const rupiah = (n) => 'Rp' + Math.round(n).toLocaleString('id-ID');
+// Nilai negatif ditulis "−Rp200.000" (tanda minus di depan), bukan "Rp-200.000"
+const rupiah = (n) => {
+  const value = Math.round(n);
+  return (value < 0 ? '−' : '') + 'Rp' + Math.abs(value).toLocaleString('id-ID');
+};
 
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
@@ -275,12 +279,15 @@ function renderAllocation({ income, spending, investment }) {
     $('#donutLabel').textContent = g ? `${g.label} · ${pct(g.value)}` : centerLabel;
     $('#donutValue').textContent = rupiah(g ? g.value : whole);
   };
-  // Mouse: sorot saat diarahkan. Sentuhan: ketuk untuk menyorot, ketuk lagi untuk melepas
+  // Mouse: sorot saat diarahkan. Sentuhan: ketuk untuk menyorot, ketuk lagi untuk melepas.
+  // Jenis pointer dicatat saat pointerdown karena event click di sebagian browser tidak membawa pointerType
+  let lastPointer = '';
   box.querySelectorAll('[data-key]').forEach((el) => {
+    el.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType; });
     el.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') activate(el.dataset.key); });
     el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') activate(null); });
-    el.addEventListener('click', (e) => {
-      if (e.pointerType !== 'mouse') activate(el.classList.contains('active') ? null : el.dataset.key);
+    el.addEventListener('click', () => {
+      if (lastPointer !== 'mouse') activate(el.classList.contains('active') ? null : el.dataset.key);
     });
   });
 }
@@ -318,7 +325,7 @@ const amountInput = $('#amount');
 
 function categoryOptions(list, selectedId) {
   return list
-    .map((c) => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${escapeHtml(c.icon + ' ' + c.name)}</option>`)
+    .map((c) => `<option value="${escapeHtml(c.id)}" ${c.id === selectedId ? 'selected' : ''}>${escapeHtml(c.icon + ' ' + c.name)}</option>`)
     .join('');
 }
 
@@ -346,9 +353,10 @@ function openForm(tx = null, draft = null) {
 document.querySelectorAll('input[name="type"]').forEach((r) =>
   r.addEventListener('change', () => fillCategories(r.value)));
 
-// Format angka dengan titik ribuan saat mengetik
+// Format angka dengan titik ribuan saat mengetik. Maks. 13 digit (hingga triliunan) agar tetap presisi
+const AMOUNT_MAX_DIGITS = 13;
 amountInput.addEventListener('input', () => {
-  const digits = amountInput.value.replace(/\D/g, '').replace(/^0+/, '');
+  const digits = amountInput.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, AMOUNT_MAX_DIGITS);
   amountInput.value = digits ? Number(digits).toLocaleString('id-ID') : '';
 });
 
@@ -400,7 +408,7 @@ let selectedIcon = ICON_CHOICES[0];
 function renderCatList() {
   const list = categoriesOf(catType);
   $('#catList').innerHTML = list.map((c, i) => `
-    <li class="cat-row" data-id="${c.id}">
+    <li class="cat-row" data-id="${escapeHtml(c.id)}">
       <div class="tx-icon">${escapeHtml(c.icon)}</div>
       <button type="button" class="cat-name">${escapeHtml(c.name)}<small>${c.investment ? '📈 investasi · ' : ''}${usageCount(c.id)} transaksi · ketuk untuk ubah</small></button>
       <button type="button" class="icon-btn" data-move="-1" aria-label="Naikkan" ${i === 0 ? 'disabled' : ''}>▲</button>
@@ -934,6 +942,129 @@ $('#chatClear').addEventListener('click', () => {
   renderChat();
 });
 
+// ---------- Tampilan (tema, warna aksen, ukuran teks, kepadatan, sudut) ----------
+
+const LOOK_KEY = 'dompetku.appearance.v1';
+const ACCENTS = [
+  ['#0f9d58', 'Hijau Dompetku'], ['#1a73e8', 'Biru Laut'], ['#00897b', 'Toska'], ['#7c4dff', 'Ungu'],
+  ['#d81b60', 'Merah Muda'], ['#ef6c00', 'Oranye'], ['#455a64', 'Grafit'],
+];
+const LOOK_DEFAULT = { theme: 'auto', accent: ACCENTS[0][0], fontSize: 16, density: 'comfortable', corners: 'rounded' };
+const SURFACE = { light: '#ffffff', dark: '#1b2128' }; // sama dengan --surface di style.css
+
+// "vars" di penyimpanan hanya hasil hitungan untuk skrip <head>, bukan pilihan pengguna
+const { vars: _storedVars, ...savedLook } = readJSON(LOOK_KEY) || {};
+let look = { ...LOOK_DEFAULT, ...savedLook };
+if (!/^#[0-9a-f]{6}$/i.test(look.accent)) look.accent = LOOK_DEFAULT.accent;
+
+const hexToRgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const rgbToHex = (rgb) => '#' + rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+const mixColor = (a, b, t) => {
+  const [ca, cb] = [hexToRgb(a), hexToRgb(b)];
+  return rgbToHex(ca.map((v, i) => v + (cb[i] - v) * t));
+};
+function luminance(hex) {
+  const [r, g, b] = hexToRgb(hex).map((v) => {
+    v /= 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrastRatio(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+// Teks di atas warna aksen: putih bila cukup terbaca (>= 3:1 untuk teks tebal di tombol/header), selain itu gelap
+const textOn = (accent) => (contrastRatio('#ffffff', accent) >= 3 ? '#ffffff' : '#111111');
+// Aksen sebagai warna teks di atas permukaan: digelapkan/dicerahkan bertahap sampai kontras >= 4.5:1
+function readableInk(accent, surface, toward) {
+  for (let t = 0; t <= 1.0001; t += 0.05) {
+    const c = mixColor(accent, toward, t);
+    if (contrastRatio(c, surface) >= 4.5) return c;
+  }
+  return toward;
+}
+
+function lookVars(accent) {
+  return {
+    '--primary': accent,
+    '--primary-text': textOn(accent),
+    '--accent-ink-light': readableInk(accent, SURFACE.light, '#000000'),
+    '--accent-ink-dark': readableInk(accent, SURFACE.dark, '#ffffff'),
+  };
+}
+
+// Sama dengan skrip kecil di <head> index.html, yang menerapkan tampilan sebelum halaman digambar
+function applyLook() {
+  const root = document.documentElement;
+  if (look.theme === 'auto') delete root.dataset.theme;
+  else root.dataset.theme = look.theme;
+  root.style.fontSize = look.fontSize + 'px';
+  root.classList.toggle('density-compact', look.density === 'compact');
+  root.classList.toggle('corners-sharp', look.corners === 'sharp');
+  const vars = lookVars(look.accent);
+  for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
+  document.querySelector('meta[name="theme-color"]').content = look.accent;
+  return vars;
+}
+
+function renderLookControls() {
+  document.querySelectorAll('.segmented[data-look]').forEach((group) =>
+    group.querySelectorAll('button').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.dataset.value === String(look[group.dataset.look])))));
+  const isPreset = ACCENTS.some(([hex]) => hex === look.accent);
+  document.querySelectorAll('#accentRow .accent-swatch').forEach((b) =>
+    b.setAttribute('aria-pressed', String(b.classList.contains('custom') ? !isPreset : b.dataset.value === look.accent)));
+  const custom = $('#accentRow .custom');
+  custom.style.setProperty('--check', textOn(look.accent));
+  if (!isPreset) custom.style.background = look.accent;
+  else custom.style.removeProperty('background');
+  $('#accentCustom').value = look.accent;
+  // Warna yang sangat terang/gelap tetap boleh dipilih, tapi beri tahu konsekuensinya
+  const weak = [];
+  if (contrastRatio(look.accent, SURFACE.light) < 1.6) weak.push('tema terang');
+  if (contrastRatio(look.accent, SURFACE.dark) < 1.6) weak.push('tema gelap');
+  $('#accentWarning').hidden = !weak.length;
+  $('#accentWarning').textContent = `⚠️ Warna ini hampir sama dengan latar di ${weak.join(' dan ')}, sehingga tombol bisa sulit terlihat.`;
+}
+
+function saveLook(changes) {
+  look = { ...look, ...changes };
+  const vars = applyLook();
+  localStorage.setItem(LOOK_KEY, JSON.stringify({ ...look, vars }));
+  renderLookControls();
+}
+
+$('#accentRow').innerHTML = ACCENTS.map(([hex, name]) =>
+  `<button type="button" class="accent-swatch" data-value="${hex}" style="background:${hex};--check:${textOn(hex)}" aria-label="${name}" title="${name}"></button>`).join('') +
+  `<label class="accent-swatch custom" title="Pilih warna sendiri" aria-label="Pilih warna sendiri">
+     <input type="color" id="accentCustom" aria-label="Pilih warna sendiri">
+   </label>`;
+
+document.querySelectorAll('.segmented[data-look]').forEach((group) =>
+  group.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const key = group.dataset.look;
+    saveLook({ [key]: key === 'fontSize' ? Number(btn.dataset.value) : btn.dataset.value });
+  }));
+
+$('#accentRow').addEventListener('click', (e) => {
+  const btn = e.target.closest('button.accent-swatch');
+  if (btn) saveLook({ accent: btn.dataset.value });
+});
+// Pratinjau langsung saat menggeser pemilih warna
+$('#accentCustom').addEventListener('input', (e) => saveLook({ accent: e.target.value.toLowerCase() }));
+
+$('#resetLook').addEventListener('click', () => {
+  saveLook(LOOK_DEFAULT);
+  localStorage.removeItem(LOOK_KEY);
+  toast('Tampilan dikembalikan ke bawaan.');
+});
+
+applyLook();
+renderLookControls();
+
 // ---------- Navigation ----------
 
 $('#fab').addEventListener('click', () => openForm());
@@ -990,7 +1121,11 @@ async function shareFile(blob, filename, text) {
 }
 
 function csvBlob() {
-  const q = (s) => `"${String(s).replace(/"/g, '""')}"`;
+  // Teks yang diawali = + - @ diberi awalan petik agar tidak dijalankan sebagai formula oleh Excel
+  const q = (s) => {
+    const text = typeof s === 'string' && /^[=+\-@\t\r]/.test(s) ? "'" + s : String(s);
+    return `"${text.replace(/"/g, '""')}"`;
+  };
   const rows = [['Tanggal', 'Jenis', 'Kategori', 'Jumlah', 'Catatan']];
   [...transactions].sort((a, b) => a.date.localeCompare(b.date)).forEach((t) =>
     rows.push([t.date, t.type === 'income' ? 'Pemasukan' : 'Pengeluaran', getCategory(t.categoryId).name, t.amount, t.note]));
@@ -1028,7 +1163,7 @@ function parseBackup(text) {
     typeof c.name === 'string' && c.name.trim() && typeof c.icon === 'string');
   const validTxs = Array.isArray(txs) && txs.every((t) =>
     t && t.id && (t.type === 'income' || t.type === 'expense') &&
-    Number.isFinite(t.amount) && /^\d{4}-\d{2}-\d{2}$/.test(t.date));
+    Number.isFinite(t.amount) && t.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(t.date));
   if (!validCats || !validTxs) throw new Error('format');
   const restored = txs.map((t) => ({ note: '', createdAt: 0, ...t }));
   normalize(cats, restored);
