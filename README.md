@@ -6,13 +6,31 @@ Aplikasi pencatat keuangan pribadi berbentuk PWA (Progressive Web App). Bisa dip
 
 - Catat pemasukan dan pengeluaran dengan kategori, tanggal, dan catatan
 - Ringkasan saldo per bulan dan saldo total
-- Laporan persentase per kategori
+- Laporan: pemasukan, pengeluaran, dan investasi bulan ini; grafik donat "ke mana pemasukan pergi"
+  (pengeluaran / investasi / sisa, dengan peringatan defisit); serta rincian per kategori
+- Kategori pengeluaran bisa ditandai sebagai **investasi/tabungan** (bawaan: "Investasi & Tabungan")
+- **Asisten keuangan (chat Gemini):** diskusi dan minta pendapat tentang kondisi keuangan. Yang dikirim
+  hanya ringkasan angka 6 bulan terakhir (tanpa catatan transaksi); percakapan disimpan di perangkat
 - Atur kategori sendiri: tambah, ubah nama/ikon, urutkan, dan hapus (transaksinya dipindah ke kategori pengganti)
 - Ekspor laporan CSV (bisa dibuka di Excel) dan cadangkan data, masing-masing bisa:
   - **Kirim / Bagikan** lewat menu Share HP (Gmail, Google Drive, WhatsApp, dll.)
   - **Simpan ke HP** di folder Download
 - Pulihkan data dari file cadangan (`.json` atau `.txt`, termasuk cadangan versi lama)
+- **Pindai struk (AI):** foto struk belanja, lalu Google Gemini membaca toko, tanggal, total, dan daftar
+  barang serta memilih kategori yang cocok. Hasilnya ditampilkan untuk diperiksa sebelum disimpan
 - Mode gelap otomatis mengikuti pengaturan HP
+
+## Pindai struk dengan Gemini (gratis)
+
+1. Buat API key gratis di https://aistudio.google.com/apikey (login akun Google).
+2. Di aplikasi: **Pengaturan → Pindai struk (AI)**, tempel API key, ketuk **Simpan** lalu **Tes koneksi**.
+3. Di Beranda, ketuk tombol **📷**, ambil foto struk atau pilih dari galeri.
+
+Catatan:
+- Butuh internet saat memindai. Foto diperkecil (maks. 2000 px) sebelum dikirim.
+- Pada paket gratis Gemini, Google dapat memakai konten yang dikirim untuk meningkatkan layanannya.
+- API key hanya disimpan di perangkat dan tidak ikut dalam file cadangan.
+- Model bisa diganti di Pengaturan jika model bawaan tidak tersedia untuk API key Anda.
 - Data tersimpan di perangkat (localStorage), tidak dikirim ke server mana pun
 
 ## Menjalankan di komputer

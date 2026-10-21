@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="google" content="notranslate">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Dompetku</title>
   <meta name="description" content="Pencatat keuangan pribadi">
   <meta name="theme-color" content="#0f9d58">
@@ -45,10 +45,38 @@
 
     <!-- Laporan -->
     <section id="view-report" class="view">
+      <div class="kpi-row">
+        <div class="kpi"><span class="label">Pemasukan</span><strong id="kpiIncome">Rp0</strong></div>
+        <div class="kpi"><span class="label"><span class="swatch" style="background:var(--series-2)"></span>Pengeluaran</span><strong id="kpiSpending">Rp0</strong></div>
+        <div class="kpi"><span class="label"><span class="swatch" style="background:var(--series-1)"></span>Investasi</span><strong id="kpiInvestment">Rp0</strong></div>
+      </div>
+
+      <h2>Ke mana pemasukan bulan ini pergi</h2>
+      <div id="allocation" class="card allocation"></div>
+
       <h2>Pengeluaran per kategori</h2>
       <div id="expenseBreakdown" class="breakdown"></div>
+      <div id="investmentSection" hidden>
+        <h2>Investasi &amp; tabungan per kategori</h2>
+        <div id="investmentBreakdown" class="breakdown"></div>
+      </div>
       <h2>Pemasukan per kategori</h2>
       <div id="incomeBreakdown" class="breakdown"></div>
+    </section>
+
+    <!-- Asisten keuangan -->
+    <section id="view-chat" class="view">
+      <div class="card chat-intro">
+        <p><strong>💬 Asisten keuangan</strong>: diskusikan kondisi keuanganmu, dijawab oleh Google Gemini.</p>
+        <p class="note">Yang dikirim ke Gemini hanya ringkasan angka (total per bulan dan per kategori, 6 bulan terakhir), tanpa catatan transaksi. Saran AI bukan nasihat keuangan profesional.</p>
+      </div>
+      <div id="chatNoKey" class="card stack" hidden>
+        <p class="note">Isi API key Gemini terlebih dahulu di Pengaturan → Pindai struk (AI). API key yang sama dipakai untuk asisten ini.</p>
+        <button type="button" id="chatOpenSettings" class="btn primary">Buka Pengaturan</button>
+      </div>
+      <div id="chatSuggestions" class="chips"></div>
+      <div id="chatLog" class="chat-log" aria-live="polite"></div>
+      <button type="button" id="chatClear" class="link-btn chat-clear" hidden>🗑️ Hapus percakapan</button>
     </section>
 
     <!-- Pengaturan -->
@@ -56,6 +84,34 @@
       <h2>Kategori</h2>
       <div class="card">
         <button id="openCategories" class="btn">🏷️ Atur kategori</button>
+      </div>
+
+      <h2>Pindai struk (AI)</h2>
+      <div class="card stack">
+        <p class="note">Foto struk dibaca oleh Google Gemini (gratis) untuk mengisi transaksi secara otomatis. Butuh internet dan API key Gemini milik Anda.</p>
+        <label class="field">API key Gemini
+          <span class="key-row">
+            <input id="aiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Tempel API key di sini">
+            <button type="button" id="toggleKey" class="icon-btn" aria-label="Tampilkan API key">👁️</button>
+          </span>
+        </label>
+        <label class="field">Model
+          <select id="aiModel"></select>
+        </label>
+        <div class="btn-row">
+          <button type="button" id="testAi" class="btn">Tes koneksi</button>
+          <button type="button" id="saveAi" class="btn primary">Simpan</button>
+        </div>
+        <p id="aiStatus" class="note" hidden></p>
+        <details class="help">
+          <summary>Cara mendapatkan API key gratis</summary>
+          <ol>
+            <li>Buka <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> dan login dengan akun Google.</li>
+            <li>Ketuk <b>Create API key</b>, lalu salin key-nya.</li>
+            <li>Tempel di kolom di atas, ketuk <b>Simpan</b>, lalu <b>Tes koneksi</b>.</li>
+          </ol>
+          <p>Pada paket gratis, Google dapat memakai foto struk untuk meningkatkan layanannya. API key hanya disimpan di HP ini dan tidak ikut dalam file cadangan.</p>
+        </details>
       </div>
 
       <h2>Ekspor laporan (CSV)</h2>
@@ -91,18 +147,26 @@
     </section>
   </main>
 
+  <form id="chatForm" class="chat-input" hidden>
+    <textarea id="chatText" rows="1" maxlength="1000" placeholder="Tulis pertanyaan…" aria-label="Pesan untuk asisten"></textarea>
+    <button type="submit" id="chatSend" class="chat-send" aria-label="Kirim">➤</button>
+  </form>
+
+  <button id="scanFab" class="fab fab-secondary" aria-label="Pindai struk">📷</button>
   <button id="fab" class="fab" aria-label="Tambah transaksi">+</button>
 
   <nav class="bottombar">
     <button data-view="home" class="active">🏠<span>Beranda</span></button>
     <button data-view="report">📊<span>Laporan</span></button>
+    <button data-view="chat">💬<span>Asisten</span></button>
     <button data-view="settings">⚙️<span>Pengaturan</span></button>
   </nav>
 
   <!-- Form transaksi -->
   <dialog id="txDialog">
     <form id="txForm" class="dialog-body" method="dialog">
-      <h2 id="formTitle">Tambah transaksi</h2>
+      <h2 id="formTitle" tabindex="-1" autofocus>Tambah transaksi</h2>
+      <p id="scanHint" class="scan-hint" hidden>✨ Diisi otomatis dari struk. Periksa jumlah, kategori, dan tanggal sebelum menyimpan.</p>
       <div class="type-toggle">
         <input type="radio" name="type" id="typeExpense" value="expense" checked>
         <label for="typeExpense">Pengeluaran</label>
@@ -119,7 +183,7 @@
         <input id="date" name="date" type="date" required>
       </label>
       <label>Catatan
-        <input id="note" name="note" maxlength="100" placeholder="Opsional">
+        <input id="note" name="note" maxlength="300" placeholder="Opsional">
       </label>
       <div class="form-actions">
         <button type="button" id="deleteTx" class="btn danger" hidden>Hapus</button>
@@ -160,6 +224,10 @@
       <label>Atau ketik emoji lain
         <input id="catIconCustom" maxlength="8" autocomplete="off" placeholder="mis. 🧋">
       </label>
+      <label id="catInvestRow" class="check-row">
+        <input type="checkbox" id="catInvest">
+        📈 Hitung sebagai investasi / tabungan
+      </label>
       <p id="catError" class="error" hidden></p>
       <div id="catDeleteBox" class="delete-box" hidden>
         <p id="catDeleteMsg"></p>
@@ -175,6 +243,35 @@
         <button type="submit" class="btn primary">Simpan</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Pindai struk -->
+  <dialog id="scanDialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2 tabindex="-1" autofocus>Pindai struk</h2>
+        <button type="button" id="closeScan" class="icon-btn" aria-label="Tutup">✕</button>
+      </div>
+      <div id="scanChoose" class="stack">
+        <p class="note">Pastikan seluruh struk terlihat, tidak buram, dan cahayanya cukup.</p>
+        <label class="btn primary">📷 Ambil foto struk
+          <input id="scanCamera" type="file" accept="image/*" capture="environment" hidden>
+        </label>
+        <label class="btn">🖼️ Pilih dari galeri
+          <input id="scanGallery" type="file" accept="image/*" hidden>
+        </label>
+      </div>
+      <div id="scanLoading" class="scan-loading" hidden>
+        <img id="scanPreview" alt="Foto struk">
+        <div class="spinner"></div>
+        <p>Membaca struk…</p>
+      </div>
+      <div id="scanError" class="stack" hidden>
+        <p id="scanErrorMsg" class="error"></p>
+        <button type="button" id="scanRetry" class="btn">Coba foto lain</button>
+        <button type="button" id="scanOpenSettings" class="btn primary">Buka Pengaturan</button>
+      </div>
+    </div>
   </dialog>
 
   <div id="toast" class="toast" role="status" hidden></div>
