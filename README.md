@@ -68,6 +68,16 @@ Agar bisa dipasang, aplikasi harus dibuka lewat **HTTPS**. Cara termudah dan gra
 
 Setelah mengubah file, naikkan versi `CACHE` di [sw.js](sw.js) (misalnya `dompetku-v2`) agar HP mengunduh versi terbaru.
 
+## Uji otomatis
+
+Jalankan sebelum setiap commit (butuh Python 3 dan Google Chrome):
+
+```bash
+bash tests/run.sh
+```
+
+Penjelasan lengkap ada di [tests/README.md](tests/README.md).
+
 ## Ikon
 
 Ikon dibuat dengan `python3 tools/make_icons.py` (butuh Pillow).

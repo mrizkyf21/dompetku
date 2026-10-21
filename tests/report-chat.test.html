@@ -1,0 +1,167 @@
+<!doctype html><meta charset="utf-8"><pre id="out">RUNNING</pre>
+<script>
+const log = [];
+const flush = () => { document.getElementById('out').textContent = log.join('\n'); };
+const ok = (cond, msg) => { log.push((cond ? 'PASS ' : 'FAIL ') + msg); flush(); };
+const step = (msg) => { log.push('.... ' + msg); flush(); };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const today = new Date();
+const ym = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+localStorage.clear();
+// Data versi lama: kategori tanpa tanda investasi; satu kategori buatan pengguna "Reksa Dana"
+localStorage.setItem('dompetku.categories.v1', JSON.stringify([
+  { id: 'e1', type: 'expense', name: 'Makan & Minum', icon: '🍜' },
+  { id: 'e2', type: 'expense', name: 'Belanja', icon: '🛒' },
+  { id: 'e3', type: 'expense', name: 'Reksa Dana', icon: '📈' },
+  { id: 'e9', type: 'expense', name: 'Lainnya', icon: '📦' },
+  { id: 'i1', type: 'income', name: 'Gaji', icon: '💼' },
+]));
+localStorage.setItem('dompetku.transactions.v1', JSON.stringify([
+  { id: 't1', createdAt: 1, type: 'income', amount: 10000000, categoryId: 'i1', date: `${ym}-01`, note: 'gaji' },
+  { id: 't2', createdAt: 2, type: 'expense', amount: 3000000, categoryId: 'e1', date: `${ym}-02`, note: 'RAHASIA-CATATAN makan' },
+  { id: 't3', createdAt: 3, type: 'expense', amount: 1000000, categoryId: 'e2', date: `${ym}-03`, note: '' },
+  { id: 't4', createdAt: 4, type: 'expense', amount: 2000000, categoryId: 'e3', date: `${ym}-04`, note: '' },
+]));
+
+const f = document.createElement('iframe');
+f.style.width = '400px'; f.style.height = '800px';
+f.src = '../index.html';
+f.onload = async () => {
+  f.onload = null; // muat ulang di dalam uji tidak boleh menjalankan uji dari awal lagi
+  try {
+    const w = f.contentWindow, d = f.contentDocument, $ = (s) => d.querySelector(s);
+    const visible = (s) => !$(s).hidden;
+    const read = (k) => JSON.parse(w.localStorage.getItem(k));
+
+    step('1. migrasi kategori investasi');
+    let cats = read('dompetku.categories.v1');
+    ok(cats.every(c => c.investment === false || (c.name === 'Investasi & Tabungan' && c.investment === true)), 'semua kategori lama diberi tanda investment=false');
+    const invIdx = cats.findIndex(c => c.name === 'Investasi & Tabungan');
+    ok(invIdx >= 0 && cats[invIdx].type === 'expense' && cats[invIdx + 1].name === 'Lainnya', 'kategori "Investasi & Tabungan" ditambahkan sebelum "Lainnya"');
+    w.location.reload(); await new Promise(r => f.addEventListener('load', r, { once: true }));
+    const w2 = f.contentWindow, d2 = f.contentDocument, $$ = (s) => d2.querySelector(s);
+    cats = JSON.parse(w2.localStorage.getItem('dompetku.categories.v1'));
+    ok(cats.filter(c => c.name === 'Investasi & Tabungan').length === 1, 'dibuka ulang: kategori investasi tidak dobel');
+
+    step('2. tandai "Reksa Dana" sebagai investasi lewat form kategori');
+    $$('#openCategories').click();
+    [...d2.querySelectorAll('.cat-row')].find(r => r.textContent.includes('Reksa Dana')).querySelector('.cat-name').click();
+    ok(!$$('#catInvestRow').hidden && !$$('#catInvest').checked, 'form kategori pengeluaran: kotak investasi tampil, belum dicentang');
+    $$('#catInvest').click(); $$('#catForm').requestSubmit();
+    cats = JSON.parse(w2.localStorage.getItem('dompetku.categories.v1'));
+    ok(cats.find(c => c.name === 'Reksa Dana').investment === true, 'Reksa Dana tersimpan sebagai investasi');
+    ok([...d2.querySelectorAll('.cat-row')].find(r => r.textContent.includes('Reksa Dana')).textContent.includes('📈 investasi'), 'daftar kategori menandai 📈 investasi');
+    $$('#catTypeIncome').click();
+    d2.querySelector('.cat-row .cat-name').click();
+    ok($$('#catInvestRow').hidden, 'kategori pemasukan: kotak investasi disembunyikan');
+    $$('#cancelCat').click(); $$('#closeCat').click();
+
+    step('3. laporan & grafik donat');
+    d2.querySelector('[data-view=report]').click();
+    ok($$('#kpiIncome').textContent === 'Rp10.000.000' && $$('#kpiSpending').textContent === 'Rp4.000.000' && $$('#kpiInvestment').textContent === 'Rp2.000.000', 'KPI: pemasukan 10jt, pengeluaran 4jt, investasi 2jt');
+    const circles = [...d2.querySelectorAll('.donut circle')];
+    ok(circles.map(c => c.dataset.key).join() === 'spending,investment,rest', 'donat: 3 bagian Pengeluaran, Investasi, Sisa');
+    const L = 2 * Math.PI * 72;
+    const dash = circles.map(c => parseFloat(c.getAttribute('stroke-dasharray')));
+    ok(Math.abs(dash[0] - (0.4 * L - 2)) < 0.01 && Math.abs(dash[1] - (0.2 * L - 2)) < 0.01 && Math.abs(dash[2] - (0.4 * L - 2)) < 0.01, 'donat: proporsi 40% / 20% / 40% dengan celah 2px');
+    const legend = [...d2.querySelectorAll('.legend li')].map(li => li.textContent.replace(/\s+/g, ' ').trim());
+    ok(legend[0] === 'Pengeluaran Rp4.000.000 40%' && legend[1] === 'Investasi Rp2.000.000 20%' && legend[2] === 'Sisa Rp4.000.000 40%', 'legenda: ' + legend.join(' | '));
+    ok($$('.allocation-status').textContent.includes('Tersisa 40%') && !$$('.allocation-status').classList.contains('is-deficit'), 'status: tersisa 40%');
+    ok($$('#donutLabel').textContent === 'Pemasukan' && $$('#donutValue').textContent === 'Rp10.000.000', 'tengah donat: total pemasukan');
+    const seg = d2.querySelector('.donut circle[data-key=investment]');
+    seg.dispatchEvent(new w2.PointerEvent('click', { bubbles: true, pointerType: 'touch' }));
+    ok($$('#donutLabel').textContent === 'Investasi · 20%' && $$('#donutValue').textContent === 'Rp2.000.000' && $$('.donut').classList.contains('has-active'), 'ketuk bagian Investasi: tengah donat menampilkan nilainya');
+    seg.dispatchEvent(new w2.PointerEvent('click', { bubbles: true, pointerType: 'touch' }));
+    ok($$('#donutLabel').textContent === 'Pemasukan' && !$$('.donut').classList.contains('has-active'), 'ketuk lagi: kembali ke total');
+    d2.querySelector('.legend li[data-key=spending]').dispatchEvent(new w2.PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    ok($$('#donutLabel').textContent === 'Pengeluaran · 40%', 'mouse di legenda Pengeluaran: tengah donat ikut berubah');
+    ok(!$$('#investmentSection').hidden && $$('#investmentBreakdown').textContent.includes('Reksa Dana'), 'bagian "Investasi & tabungan per kategori" tampil');
+    ok(!$$('#expenseBreakdown').textContent.includes('Reksa Dana') && $$('#expenseBreakdown').textContent.includes('Makan'), 'Pengeluaran per kategori tidak memuat investasi');
+    const barColors = new Set([...d2.querySelectorAll('.breakdown .bar > div')].map(b => w2.getComputedStyle(b).backgroundColor));
+    ok(barColors.size === 1, 'batang per kategori memakai satu warna');
+
+    step('4. defisit & kosong');
+    const txs = JSON.parse(w2.localStorage.getItem('dompetku.transactions.v1'));
+    w2.renderAllocation({ income: 1000000, spending: 1500000, investment: 500000 });
+    ok($$('.allocation-status').classList.contains('is-deficit') && $$('.allocation-status').textContent.includes('Rp1.000.000') && $$('#donutLabel').textContent === 'Total keluar' && !d2.querySelector('.donut circle[data-key=rest]'), 'defisit: peringatan kekurangan Rp1.000.000, tanpa bagian Sisa');
+    w2.renderAllocation({ income: 0, spending: 50000, investment: 0 });
+    ok(d2.querySelectorAll('.donut circle').length === 1 && parseFloat(d2.querySelector('.donut circle').getAttribute('stroke-dasharray')) > L - 0.01, 'hanya satu bagian: lingkaran penuh tanpa celah');
+    w2.renderAllocation({ income: 0, spending: 0, investment: 0 });
+    ok($$('#allocation').textContent.includes('Belum ada data'), 'tanpa data: pesan kosong');
+    d2.querySelector('#nextMonth').click();
+    ok($$('#kpiIncome').textContent === 'Rp0' && $$('#allocation').textContent.includes('Belum ada data') && $$('#investmentSection').hidden, 'bulan tanpa transaksi: KPI 0 dan pesan kosong');
+    d2.querySelector('#prevMonth').click();
+
+    step('5. tab Asisten tanpa API key');
+    d2.querySelector('[data-view=chat]').click();
+    ok(d2.querySelector('#view-chat').classList.contains('active') && !$$('#chatNoKey').hidden && $$('#chatForm').hidden && $$('#fab').hidden && $$('#scanFab').hidden, 'tanpa API key: petunjuk Pengaturan, kolom chat & tombol + disembunyikan');
+
+    step('6. chat dengan Gemini tiruan');
+    w2.localStorage.setItem('dompetku.ai.v1', JSON.stringify({ apiKey: 'KEY-TES', model: 'gemini-3.5-flash-lite' }));
+    w2.location.reload(); await new Promise(r => f.addEventListener('load', r, { once: true }));
+    const w3 = f.contentWindow, d3 = f.contentDocument, $3 = (s) => d3.querySelector(s);
+    let lastBody = null, reply = null;
+    w3.fetch = (url, opts) => { lastBody = JSON.parse(opts.body); return reply(); };
+    const respond = (text) => () => Promise.resolve(new w3.Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }), { status: 200 }));
+    d3.querySelector('[data-view=chat]').click();
+    ok($3('#chatNoKey').hidden && !$3('#chatForm').hidden && d3.querySelectorAll('#chatSuggestions .chip').length === 4, 'dengan API key: kolom chat + 4 saran pertanyaan');
+    reply = respond('Kondisi keuanganmu **cukup sehat**.\n\n- Pengeluaran terbesar: *Makan & Minum*\n- Investasi 20%\n\n1. Kurangi jajan\n2. Naikkan investasi\n<img src=x onerror=alert(1)>');
+    d3.querySelector('#chatSuggestions .chip').click(); await sleep(50);
+    const sys = lastBody.system_instruction.parts[0].text;
+    ok(lastBody.contents.length === 1 && lastBody.contents[0].role === 'user' && lastBody.contents[0].parts[0].text === 'Bagaimana kondisi keuanganku bulan ini?', 'request: pertanyaan saran terkirim sebagai pesan user');
+    ok(sys.includes(`- ${ym}: Rp10.000.000 | Rp4.000.000 | Rp2.000.000 | Rp4.000.000`), 'konteks: ringkasan bulan ini benar (masuk | keluar | investasi | sisa)');
+    ok(sys.includes('Makan & Minum Rp3.000.000') && sys.includes('Reksa Dana Rp2.000.000'), 'konteks: rincian per kategori');
+    ok(!sys.includes('RAHASIA-CATATAN'), 'privasi: catatan transaksi TIDAK dikirim ke Gemini');
+    ok((sys.match(/^- \d{4}-\d{2}: /gm) || []).length === 6, 'konteks: 6 bulan terakhir');
+    const bubbles = [...d3.querySelectorAll('#chatLog .msg')];
+    ok(bubbles.length === 2 && bubbles[0].classList.contains('user') && bubbles[1].classList.contains('model'), 'tampilan: gelembung user + asisten');
+    const html = bubbles[1].innerHTML;
+    ok(html.includes('<strong>cukup sehat</strong>') && html.includes('<em>Makan &amp; Minum</em>') && bubbles[1].querySelectorAll('ul li').length === 2 && bubbles[1].querySelectorAll('ol li').length === 2, 'markdown: tebal, miring, daftar poin & bernomor');
+    ok(!bubbles[1].querySelector('img') && html.includes('&lt;img'), 'keamanan: HTML dari AI di-escape (tidak dieksekusi)');
+    ok($3('#chatSuggestions').hidden && !$3('#chatClear').hidden, 'setelah ada percakapan: saran disembunyikan, tombol hapus muncul');
+
+    reply = respond('Jawaban kedua');
+    $3('#chatText').value = 'Pertanyaan lanjutan\nbaris dua';
+    $3('#chatText').dispatchEvent(new w3.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await sleep(50);
+    ok(lastBody.contents.map(c => c.role).join() === 'user,model,user' && lastBody.contents[2].parts[0].text === 'Pertanyaan lanjutan\nbaris dua', 'riwayat: dikirim berurutan user/model/user; Enter mengirim');
+    ok($3('#chatText').value === '', 'kolom pesan dikosongkan setelah kirim');
+
+    step('7. error & kirim ulang');
+    reply = () => Promise.resolve(new w3.Response(JSON.stringify({ error: { message: 'Resource has been exhausted' } }), { status: 429 }));
+    $3('#chatText').value = 'Pertanyaan ketiga'; $3('#chatForm').requestSubmit(); await sleep(50);
+    const err = d3.querySelector('#chatLog .msg.error');
+    ok(err && err.textContent.includes('Batas pemakaian') && err.querySelector('[data-chat=retry]'), 'error kuota: pesan + tombol Kirim ulang');
+    const stored = JSON.parse(w3.localStorage.getItem('dompetku.chat.v1'));
+    ok(stored.length === 5 && stored[4].role === 'user', 'pesan user tetap tersimpan meski gagal; error tidak disimpan');
+    reply = respond('Jawaban ketiga');
+    err.querySelector('[data-chat=retry]').click(); await sleep(50);
+    const after = JSON.parse(w3.localStorage.getItem('dompetku.chat.v1'));
+    ok(after.length === 6 && after[5].text === 'Jawaban ketiga' && !d3.querySelector('#chatLog .msg.error') && lastBody.contents.filter(c => c.parts[0].text === 'Pertanyaan ketiga').length === 1, 'Kirim ulang: berhasil tanpa menggandakan pertanyaan');
+    reply = () => Promise.resolve(new w3.Response(JSON.stringify({ error: { message: 'API key not valid. Please pass a valid API key.' } }), { status: 400 }));
+    $3('#chatText').value = 'x'; $3('#chatForm').requestSubmit(); await sleep(50);
+    ok(d3.querySelector('#chatLog [data-chat=settings]'), 'API key salah: tombol Buka Pengaturan di gelembung error');
+
+    step('8. persistensi, batas, hapus');
+    w3.location.reload(); await new Promise(r => f.addEventListener('load', r, { once: true }));
+    const w4 = f.contentWindow, d4 = f.contentDocument, $4 = (s) => d4.querySelector(s);
+    d4.querySelector('[data-view=chat]').click();
+    ok(d4.querySelectorAll('#chatLog .msg').length === 7, 'percakapan tetap ada setelah aplikasi dibuka ulang');
+    const backup = await w4.backupBlob().text();
+    ok(!backup.includes('Jawaban ketiga'), 'percakapan tidak ikut file cadangan');
+    let lastBody4 = null;
+    w4.fetch = (url, opts) => { lastBody4 = JSON.parse(opts.body); return Promise.resolve(new w4.Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }), { status: 200 })); };
+    for (let i = 0; i < 25; i++) { $4('#chatText').value = 'pesan ' + i; $4('#chatForm').requestSubmit(); await sleep(20); }
+    ok(JSON.parse(w4.localStorage.getItem('dompetku.chat.v1')).length === 40, 'riwayat tersimpan dibatasi 40 pesan');
+    ok(lastBody4.contents.length <= 20 && lastBody4.contents[0].role === 'user', 'riwayat dikirim maks 20 pesan, diawali pesan user');
+    w4.confirm = () => true;
+    $4('#chatClear').click();
+    ok(d4.querySelectorAll('#chatLog .msg').length === 0 && JSON.parse(w4.localStorage.getItem('dompetku.chat.v1')).length === 0 && !$4('#chatSuggestions').hidden, 'Hapus percakapan: kosong, saran muncul lagi');
+    d4.querySelector('[data-view=home]').click();
+    ok($4('#chatForm').hidden && !$4('#fab').hidden && !$4('#scanFab').hidden, 'kembali ke Beranda: kolom chat hilang, tombol + dan 📷 muncul');
+    step('SELESAI');
+  } catch (e) { log.push('ERROR ' + e.stack); flush(); }
+};
+document.body.appendChild(f);
+</script>

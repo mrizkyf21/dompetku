@@ -1,0 +1,147 @@
+<!doctype html><meta charset="utf-8"><pre id="out">RUNNING</pre>
+<script>
+const log = [];
+const flush = () => { document.getElementById('out').textContent = log.join('\n'); };
+const ok = (cond, msg) => { log.push((cond ? 'PASS ' : 'FAIL ') + msg); flush(); };
+const step = (msg) => { log.push('.... ' + msg); flush(); };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+localStorage.clear();
+const f = document.createElement('iframe');
+f.style.width = '400px'; f.style.height = '800px';
+f.src = '../index.html';
+f.onload = async () => {
+  try {
+    const w = f.contentWindow, d = f.contentDocument, $ = (s) => d.querySelector(s);
+    const visible = (s) => !$(s).hidden;
+    const respond = (body, status = 200) => Promise.resolve(new w.Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
+    const geminiReply = (obj) => () => respond({ candidates: [{ content: { parts: [{ text: 'thinking...', thought: true }, { text: JSON.stringify(obj) }] } }] });
+    const geminiError = (message, status) => () => respond({ error: { message } }, status);
+    let lastReq = null, nextReply = null;
+    w.fetch = (url, opts) => { lastReq = { url, opts, body: opts && opts.body ? JSON.parse(opts.body) : null }; return nextReply(url, opts); };
+    const fileFrom = async (path) => { const b = await (await fetch(path)).blob(); return new w.File([b], 'struk.jpg', { type: 'image/jpeg' }); };
+    step('memuat foto contoh');
+    const struk = await fileFrom('fixtures/struk-contoh.jpg');
+    const runScan = async (file = struk) => { await w.scanReceipt(file); await sleep(50); };
+    const resetDialogs = () => { ['#txDialog', '#scanDialog'].forEach(s => $(s).open && $(s).close()); };
+
+    step('1. tanpa API key');
+    $('#scanFab').click();
+    ok($('#scanDialog').open && visible('#scanError') && visible('#scanOpenSettings') && $('#scanErrorMsg').textContent.includes('API key'), 'tanpa API key: muncul pesan + tombol Buka Pengaturan');
+    $('#scanOpenSettings').click();
+    ok(!$('#scanDialog').open && $('#view-settings').classList.contains('active') && $('#scanFab').hidden, 'Buka Pengaturan: pindah ke tab Pengaturan, tombol kamera disembunyikan');
+
+    step('2. pengaturan AI');
+    $('#aiKey').value = '  KUNCI-RAHASIA-123  ';
+    $('#aiModel').value = 'gemini-3.1-flash-lite';
+    $('#saveAi').click();
+    const saved = JSON.parse(w.localStorage.getItem('dompetku.ai.v1'));
+    ok(saved.apiKey === 'KUNCI-RAHASIA-123' && saved.model === 'gemini-3.1-flash-lite', 'pengaturan AI tersimpan (spasi dibuang)');
+    const backupText = await w.backupBlob().text();
+    ok(!backupText.includes('KUNCI-RAHASIA-123'), 'API key TIDAK ikut ke file cadangan');
+    $('#toggleKey').click();
+    ok($('#aiKey').type === 'text', 'tombol mata menampilkan API key');
+    $('#toggleKey').click();
+
+    step('3. tes koneksi');
+    nextReply = () => respond({ candidates: [{ content: { parts: [{ text: 'OK' }] } }] });
+    $('#testAi').click(); await sleep(100);
+    ok($('#aiStatus').textContent.includes('Terhubung') && $('#aiStatus').classList.contains('status-ok'), 'tes koneksi berhasil ditampilkan');
+    nextReply = geminiError('API key not valid. Please pass a valid API key.', 400);
+    $('#testAi').click(); await sleep(100);
+    ok($('#aiStatus').textContent.includes('tidak valid') && $('#aiStatus').classList.contains('status-error'), 'tes koneksi: API key salah dilaporkan');
+
+    $('#openCategories').click();
+    $('#addCat').click(); $('#catName').value = 'Kebutuhan Dapur'; $('#catForm').requestSubmit(); $('#closeCat').click();
+    const dapurId = JSON.parse(w.localStorage.getItem('dompetku.categories.v1')).find(c => c.name === 'Kebutuhan Dapur').id;
+
+    step('4. pindai sukses');
+    nextReply = geminiReply({ is_receipt: true, store: 'Toko Makmur Jaya', date: '2026-10-20', total: 200000,
+      items: [{ name: 'Beras Pandan Wangi 5kg', qty: 1, price: 72500 }, { name: 'Indomie Goreng', qty: 5, price: 15500 }, { name: 'Susu UHT 1L', qty: 2, price: 36000 }],
+      category: 'Kebutuhan Dapur' });
+    $('#scanFab').click();
+    ok(visible('#scanChoose') && !visible('#scanError'), 'dengan API key: pilihan Ambil foto / Galeri muncul');
+    await runScan();
+    ok(lastReq.url === 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent', 'request: endpoint + model sesuai pilihan');
+    ok(lastReq.opts.headers['x-goog-api-key'] === 'KUNCI-RAHASIA-123' && lastReq.opts.method === 'POST', 'request: API key di header');
+    const parts = lastReq.body.contents[0].parts;
+    ok(parts[1].inline_data.mime_type === 'image/jpeg' && parts[1].inline_data.data.length > 1000, 'request: foto terlampir sebagai JPEG base64');
+    const sch = lastReq.body.generationConfig.response_schema;
+    ok(lastReq.body.generationConfig.response_mime_type === 'application/json' && sch.properties.category.enum.includes('Kebutuhan Dapur') && sch.properties.category.enum.includes('Belanja') && !sch.properties.category.enum.includes('Gaji'), 'request: JSON schema + kategori pengeluaran (termasuk buatan sendiri, tanpa kategori pemasukan)');
+    ok(parts[0].text.includes('TUNAI') && parts[0].text.includes('25500'), 'prompt: memberi aturan TOTAL vs TUNAI dan format ribuan');
+    ok($('#txDialog').open && !$('#scanDialog').open, 'hasil: form transaksi terbuka, dialog pindai tertutup');
+    ok($('#formTitle').textContent === 'Periksa hasil pindai' && visible('#scanHint'), 'hasil: judul "Periksa hasil pindai" + pesan periksa');
+    ok($('#amount').value === '200.000', 'hasil: jumlah = ' + $('#amount').value);
+    ok($('#category').value === dapurId, 'hasil: kategori otomatis = Kebutuhan Dapur');
+    ok($('#date').value === '2026-10-20', 'hasil: tanggal dari struk');
+    ok($('#note').value === 'Toko Makmur Jaya: Beras Pandan Wangi 5kg, Indomie Goreng x5, Susu UHT 1L x2', 'hasil: catatan = "' + $('#note').value + '"');
+    ok($('#typeExpense').checked && $('#deleteTx').hidden, 'hasil: jenis pengeluaran, transaksi baru');
+    $('#txForm').requestSubmit();
+    const txs = JSON.parse(w.localStorage.getItem('dompetku.transactions.v1'));
+    ok(txs.length === 1 && txs[0].amount === 200000 && txs[0].categoryId === dapurId, 'simpan: tercatat 1 transaksi Rp200.000');
+    $('#fab').click();
+    ok(!visible('#scanHint') && $('#formTitle').textContent === 'Tambah transaksi', 'form biasa: pesan hasil pindai tidak muncul');
+    resetDialogs();
+
+    step('5. tanggal/kategori/total aneh');
+    nextReply = geminiReply({ is_receipt: true, store: '', date: '2099-01-01', total: 15000.4, items: [], category: 'Tidak Ada' });
+    $('#scanFab').click(); await runScan();
+    ok($('#date').value === w.todayISO(), 'tanggal masa depan diganti hari ini');
+    ok($('#category').selectedOptions[0].textContent.includes('Belanja'), 'kategori tak dikenal -> Belanja');
+    ok($('#amount').value === '15.000' && $('#note').value === '', 'total dibulatkan, catatan kosong jika tak ada info');
+    resetDialogs();
+
+    step('6. catatan panjang');
+    nextReply = geminiReply({ is_receipt: true, store: 'Toko', date: '2026-10-20', total: 1000, items: Array.from({ length: 60 }, (_, i) => ({ name: 'Barang nomor ' + i, qty: 1, price: 1 })), category: 'Belanja' });
+    $('#scanFab').click(); await runScan();
+    ok($('#note').value.length <= 300, 'catatan panjang dipotong maks 300 karakter (' + $('#note').value.length + ')');
+    resetDialogs();
+
+    step('7. kasus error');
+    const errorCase = async (reply, expect, settingsBtn, label) => {
+      nextReply = reply; $('#scanFab').click(); await runScan();
+      ok($('#scanDialog').open && visible('#scanError') && $('#scanErrorMsg').textContent.includes(expect) && visible('#scanOpenSettings') === settingsBtn && !$('#txDialog').open,
+        label + ' -> "' + $('#scanErrorMsg').textContent + '"');
+      resetDialogs();
+    };
+    await errorCase(geminiReply({ is_receipt: false, store: '', date: '', total: 0, items: [], category: 'Belanja' }), 'tidak terlihat seperti struk', false, 'bukan struk');
+    await errorCase(geminiReply({ is_receipt: true, store: 'X', date: '', total: 0, items: [], category: 'Belanja' }), 'Total belanja tidak terbaca', false, 'total 0');
+    await errorCase(geminiError('API key not valid. Please pass a valid API key.', 400), 'API key', true, 'API key salah');
+    await errorCase(geminiError('models/x is not found', 404), 'Pilih model lain', true, 'model tidak ada');
+    await errorCase(geminiError('Resource has been exhausted', 429), 'Batas pemakaian', false, 'kuota habis');
+    await errorCase(geminiError('Internal error', 500), 'error (500)', false, 'error server');
+    await errorCase(() => Promise.reject(new TypeError('Failed to fetch')), 'koneksi internet', false, 'tanpa internet');
+    await errorCase(() => respond({ candidates: [{ content: { parts: [{ text: 'bukan json' }] } }] }), 'tidak bisa dibaca', false, 'jawaban bukan JSON');
+    await errorCase(() => respond({ candidates: [] }), 'tidak memberikan jawaban', false, 'jawaban kosong');
+    $('#scanFab').click(); $('#scanRetry').click();
+    ok(visible('#scanChoose'), 'Coba foto lain: kembali ke pilihan foto');
+    resetDialogs();
+
+    step('8. batal saat membaca');
+    let aborted = false;
+    // Seperti fetch asli: langsung gagal jika sinyal sudah dibatalkan sebelum permintaan dikirim
+    nextReply = (url, opts) => new Promise((_, reject) => {
+      const abort = () => { aborted = true; reject(new w.DOMException('aborted', 'AbortError')); };
+      if (opts.signal.aborted) abort(); else opts.signal.addEventListener('abort', abort);
+    });
+    $('#scanFab').click();
+    const pending = w.scanReceipt(struk); await sleep(300);
+    ok(visible('#scanLoading') && $('#scanPreview').src.startsWith('blob:'), 'sedang membaca: tampil foto + loading');
+    $('#closeScan').click(); await pending; await sleep(20);
+    ok(aborted && !$('#scanDialog').open && !$('#txDialog').open, 'tutup saat membaca: permintaan dibatalkan, tidak ada error');
+
+    step('9. foto besar');
+    nextReply = geminiReply({ is_receipt: true, store: 'X', date: '2026-10-20', total: 1, items: [], category: 'Belanja' });
+    $('#scanFab').click(); await runScan(await fileFrom('fixtures/struk-besar.jpg'));
+    const b64 = lastReq.body.contents[0].parts[1].inline_data.data;
+    const img = await createImageBitmap(await (await fetch('data:image/jpeg;base64,' + b64)).blob());
+    ok(Math.max(img.width, img.height) === 2000, 'foto 3080x4130 diperkecil -> ' + img.width + 'x' + img.height + ' (' + Math.round(b64.length * 3 / 4 / 1024) + ' KB)');
+    resetDialogs();
+
+    step('10. file rusak');
+    $('#scanFab').click(); await runScan(new w.File(['bukan gambar'], 'x.jpg', { type: 'image/jpeg' }));
+    ok($('#scanErrorMsg').textContent.includes('Format foto'), 'file bukan gambar ditolak');
+    step('SELESAI');
+  } catch (e) { log.push('ERROR ' + e.stack); flush(); }
+};
+document.body.appendChild(f);
+</script>

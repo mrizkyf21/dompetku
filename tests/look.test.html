@@ -1,0 +1,91 @@
+<!doctype html><meta charset="utf-8"><pre id="out">RUNNING</pre>
+<script>
+const log = [];
+const flush = () => { document.getElementById('out').textContent = log.join('\n'); };
+const ok = (cond, msg) => { log.push((cond ? 'PASS ' : 'FAIL ') + msg); flush(); };
+const step = (msg) => { log.push('.... ' + msg); flush(); };
+localStorage.clear();
+const f = document.createElement('iframe');
+f.style.width = '400px'; f.style.height = '800px';
+f.src = '../index.html';
+const loaded = () => new Promise(r => f.addEventListener('load', r, { once: true }));
+f.onload = async () => {
+  f.onload = null;
+  try {
+    let w = f.contentWindow, d = f.contentDocument, $ = (s) => d.querySelector(s);
+    const css = (name) => w.getComputedStyle(d.documentElement).getPropertyValue(name).trim();
+    const bg = (s) => w.getComputedStyle($(s)).backgroundColor;
+    const rgb = (hex) => `rgb(${[1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
+
+    step('1. bawaan');
+    ok(!localStorage.getItem('dompetku.appearance.v1') || true, 'mulai tanpa pengaturan tampilan');
+    ok(d.querySelector('[data-look=theme] [data-value=auto]').getAttribute('aria-pressed') === 'true' && d.querySelector('[data-look=fontSize] [data-value="16"]').getAttribute('aria-pressed') === 'true', 'pilihan bawaan tertandai: Ikuti HP, Normal');
+    ok(d.querySelectorAll('#accentRow .accent-swatch').length === 8 && d.querySelector('#accentRow [data-value="#0f9d58"]').getAttribute('aria-pressed') === 'true', '7 warna siap pakai + pilih sendiri; Hijau terpilih');
+    ok(bg('.topbar') === rgb('#0f9d58'), 'header berwarna hijau bawaan');
+    ok(css('--primary-ink') === '#0d854b', 'warna teks aksen bawaan sesuai CSS (' + css('--primary-ink') + ')');
+
+    step('2. tema manual');
+    d.querySelector('[data-look=theme] [data-value=dark]').click();
+    ok(d.documentElement.dataset.theme === 'dark' && bg('body') === rgb('#11151a') && css('color-scheme') === 'dark', 'Gelap: latar gelap + color-scheme dark');
+    d.querySelector('[data-look=theme] [data-value=light]').click();
+    ok(d.documentElement.dataset.theme === 'light' && bg('body') === rgb('#f4f6f8'), 'Terang: latar terang');
+    d.querySelector('[data-look=theme] [data-value=auto]').click();
+    ok(!('theme' in d.documentElement.dataset), 'Ikuti HP: atribut tema dihapus');
+
+    step('3. warna aksen');
+    d.querySelector('#accentRow [data-value="#7c4dff"]').click();
+    ok(bg('.topbar') === rgb('#7c4dff') && bg('#fab') === rgb('#7c4dff'), 'Ungu: header & tombol + ikut berubah');
+    ok(w.getComputedStyle(d.querySelector('.bottombar button.active')).color === rgb('#7c4dff'), 'menu aktif memakai warna teks aksen yang terbaca');
+    ok(d.querySelector('meta[name=theme-color]').content === '#7c4dff', 'warna bilah status HP ikut berubah');
+    const picker = $('#accentCustom');
+    picker.value = '#ffeb3b'; picker.dispatchEvent(new Event('input', { bubbles: true }));
+    ok(css('--primary') === '#ffeb3b' && css('--primary-text') === '#111111', 'kuning muda: teks di atasnya otomatis gelap');
+    const ink = css('--accent-ink-light');
+    ok(w.contrastRatio(ink, '#ffffff') >= 4.5 && ink !== '#ffeb3b', 'kuning muda: teks aksen di latar putih digelapkan (' + ink + ', ' + w.contrastRatio(ink, '#ffffff').toFixed(1) + ':1)');
+    ok(d.querySelector('#accentRow .custom').getAttribute('aria-pressed') === 'true' && !d.querySelector('#accentRow [data-value="#7c4dff"]').matches('[aria-pressed=true]'), 'pemilih warna sendiri tertandai');
+    picker.value = '#fefefe'; picker.dispatchEvent(new Event('input', { bubbles: true }));
+    ok(!$('#accentWarning').hidden && $('#accentWarning').textContent.includes('tema terang'), 'warna hampir putih: muncul peringatan');
+    picker.value = '#123456'; picker.dispatchEvent(new Event('input', { bubbles: true }));
+    const darkInk = css('--accent-ink-dark');
+    ok($('#accentWarning').textContent.includes('tema gelap') && !$('#accentWarning').textContent.includes('tema terang') && w.contrastRatio(darkInk, '#1b2128') >= 4.5, 'biru tua: peringatan khusus tema gelap + teks aksen di tema gelap dicerahkan (' + darkInk + ')');
+    for (const [hex] of w.eval('ACCENTS')) {
+      const v = w.lookVars(hex);
+      if (!(w.contrastRatio(v['--primary-text'], hex) >= 3 && w.contrastRatio(v['--accent-ink-light'], '#ffffff') >= 4.5 && w.contrastRatio(v['--accent-ink-dark'], '#1b2128') >= 4.5)) ok(false, 'kontras ' + hex);
+    }
+    ok(true, 'semua 7 warna siap pakai: teks >= 3:1 di tombol, teks aksen >= 4.5:1 di kedua tema');
+
+    step('4. ukuran, kepadatan, sudut');
+    d.querySelector('[data-look=fontSize] [data-value="20"]').click();
+    ok(w.getComputedStyle(d.documentElement).fontSize === '20px' && w.getComputedStyle($('.topbar h1')).fontSize === '24px', 'Sangat besar: teks membesar (judul 24px)');
+    d.querySelector('[data-look=density] [data-value=compact]').click();
+    ok(d.documentElement.classList.contains('density-compact') && w.getComputedStyle($('.card')).paddingTop === '12px', 'Ringkas: jarak kartu 12px');
+    d.querySelector('[data-look=corners] [data-value=sharp]').click();
+    ok(d.documentElement.classList.contains('corners-sharp') && w.getComputedStyle($('.card')).borderRadius === '6px' && w.getComputedStyle($('#fab')).borderRadius === '14px', 'Tegas: sudut kartu 6px, tombol + 14px');
+
+    step('5. tersimpan & diterapkan sebelum halaman digambar');
+    const saved = JSON.parse(w.localStorage.getItem('dompetku.appearance.v1'));
+    ok(saved.accent === '#123456' && saved.fontSize === 20 && saved.vars['--primary'] === '#123456', 'pilihan + hasil hitungan warna tersimpan');
+    d.querySelector('[data-look=theme] [data-value=dark]').click();
+    w.location.reload(); await loaded();
+    w = f.contentWindow; d = f.contentDocument; $ = (s) => d.querySelector(s);
+    // Cek kondisi yang dibuat skrip <head> (dijalankan sebelum app.js) lewat nilai inline
+    ok(d.documentElement.dataset.theme === 'dark' && d.documentElement.style.fontSize === '20px' && d.documentElement.style.getPropertyValue('--primary') === '#123456' && d.documentElement.classList.contains('corners-sharp'), 'dibuka ulang: tema, ukuran, warna, dan sudut langsung diterapkan');
+    ok(d.querySelector('[data-look=density] [data-value=compact]').getAttribute('aria-pressed') === 'true', 'kontrol pengaturan menampilkan pilihan tersimpan');
+
+    step('6. kembalikan bawaan & data rusak');
+    $('#resetLook').click();
+    ok(!w.localStorage.getItem('dompetku.appearance.v1') && !('theme' in d.documentElement.dataset) && d.documentElement.style.fontSize === '16px' && !d.documentElement.classList.contains('corners-sharp') && !d.documentElement.classList.contains('density-compact'), 'Kembalikan bawaan: semua pilihan kembali, penyimpanan dihapus');
+    ok(w.getComputedStyle(d.querySelector('.topbar')).backgroundColor === rgb('#0f9d58'), 'header kembali hijau');
+    w.localStorage.setItem('dompetku.appearance.v1', '{"accent":"bukan-warna","theme":"dark"}');
+    w.location.reload(); await loaded();
+    w = f.contentWindow; d = f.contentDocument;
+    ok(w.getComputedStyle(d.querySelector('.topbar')).backgroundColor === rgb('#0f9d58') && d.documentElement.dataset.theme === 'dark', 'warna tersimpan tidak valid: jatuh ke hijau bawaan, pilihan lain tetap');
+    w.localStorage.setItem('dompetku.appearance.v1', '{rusak');
+    w.location.reload(); await loaded();
+    w = f.contentWindow; d = f.contentDocument;
+    ok(d.querySelector('#view-home') && w.getComputedStyle(d.querySelector('.topbar')).backgroundColor === rgb('#0f9d58'), 'data tampilan rusak: aplikasi tetap terbuka dengan tampilan bawaan');
+    step('SELESAI');
+  } catch (e) { log.push('ERROR ' + e.stack); flush(); }
+};
+document.body.appendChild(f);
+</script>

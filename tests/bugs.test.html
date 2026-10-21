@@ -1,0 +1,82 @@
+<!doctype html><meta charset="utf-8"><pre id="out">RUNNING</pre>
+<script>
+// Uji regresi untuk bug yang ditemukan saat pemeriksaan kode sebelum commit
+const log = [];
+const flush = () => { document.getElementById('out').textContent = log.join('\n'); };
+const ok = (cond, msg) => { log.push((cond ? 'PASS ' : 'FAIL ') + msg); flush(); };
+const step = (msg) => { log.push('.... ' + msg); flush(); };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+localStorage.clear();
+const f = document.createElement('iframe');
+f.style.width = '400px'; f.style.height = '800px';
+f.src = '../index.html';
+f.onload = async () => {
+  f.onload = null;
+  try {
+    const w = f.contentWindow, d = f.contentDocument, $ = (s) => d.querySelector(s);
+
+    step('A. teks "Sangat besar": kolom chat tidak boleh menimpa menu bawah');
+    w.eval('saveLook({ fontSize: 20 })');
+    d.querySelector('[data-view=chat]').click();
+    const nav = $('.bottombar').getBoundingClientRect();
+    const navH = parseFloat(w.getComputedStyle($('.bottombar')).height);
+    const chatBottom = parseFloat(w.getComputedStyle($('#chatForm')).bottom);
+    ok(chatBottom >= navH - 0.5, `kolom chat (bottom ${chatBottom}px) berada di atas menu bawah (tinggi ${navH}px)`);
+    d.querySelector('[data-view=home]').click();
+    const fabBottom = $('#fab').getBoundingClientRect().bottom;
+    ok(fabBottom <= nav.top, `tombol + (bawah ${fabBottom.toFixed(0)}px) tidak menimpa menu bawah (atas ${nav.top.toFixed(0)}px)`);
+    w.eval('saveLook({ fontSize: 16 })');
+
+    step('B. file cadangan berbahaya tidak boleh menyisipkan HTML');
+    const evil = 'x" onmouseover="window.__xss=1" data-a="';
+    const backup = JSON.stringify({ app: 'dompetku', version: 2, categories: [
+      { id: evil, type: 'expense', name: 'Jahat', icon: '😈', investment: false },
+      { id: 'i1', type: 'income', name: 'Gaji', icon: '💼', investment: false },
+    ], transactions: [{ id: 't1', type: 'expense', amount: 1000, categoryId: evil, date: '2026-10-01', note: '' }] });
+    const parsed = w.parseBackup(backup);
+    w.eval('categories = ' + JSON.stringify(parsed.cats) + '; transactions = ' + JSON.stringify(parsed.txs) + '; render();');
+    $('#openCategories').click();
+    const row = d.querySelector('.cat-row');
+    ok(row && !row.hasAttribute('onmouseover') && row.dataset.id === evil, 'daftar kategori: id di-escape, tidak ada atribut sisipan');
+    $('#closeCat').click();
+    $('#fab').click();
+    const opt = [...d.querySelectorAll('#category option')].find(o => o.textContent.includes('Jahat'));
+    ok(opt && opt.value === evil && !opt.hasAttribute('onmouseover'), 'pilihan kategori di form: value di-escape');
+    $('#txForm').requestSubmit(); // jumlah kosong -> tidak tersimpan
+    $('#cancelTx').click();
+    ok(!w.__xss, 'tidak ada kode yang tereksekusi');
+
+    step('C. jumlah sangat panjang tidak boleh kehilangan presisi');
+    $('#fab').click();
+    $('#amount').value = '123456789012345678901';
+    $('#amount').dispatchEvent(new Event('input'));
+    const digits = $('#amount').value.replace(/\D/g, '');
+    ok(digits.length <= 13 && Number(digits).toLocaleString('id-ID') === $('#amount').value, `input jumlah dibatasi 13 digit dan tetap akurat (${$('#amount').value})`);
+    $('#cancelTx').click();
+
+    step('D. CSV aman dibuka di Excel (tanpa formula)');
+    w.eval(`transactions.push({ id: 't9', createdAt: 9, type: 'expense', amount: 5000, categoryId: categories.find(c => c.type === 'expense').id, date: '2026-10-02', note: '=HYPERLINK("http://contoh.invalid","klik")' })`);
+    const csv = await w.csvBlob().text();
+    ok(csv.includes(`"'=HYPERLINK`) && !csv.includes(';"=HYPERLINK'), 'catatan yang diawali "=" diberi awalan petik agar tidak dijalankan sebagai formula');
+
+    step('E. cadangan dengan jumlah tidak wajar ditolak');
+    let rejected = false;
+    try { w.parseBackup(JSON.stringify([{ id: 'n', type: 'expense', amount: -5000, category: 'Belanja', date: '2026-10-01' }])); } catch { rejected = true; }
+    ok(rejected, 'jumlah negatif di file cadangan ditolak');
+
+    step('F. sentuhan di donat tanpa info pointerType (Safari lama)');
+    w.eval('renderAllocation({ income: 1000, spending: 400, investment: 100 })');
+    const seg = d.querySelector('.donut circle[data-key=spending]');
+    seg.dispatchEvent(new w.PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }));
+    seg.dispatchEvent(new w.PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    seg.dispatchEvent(new w.MouseEvent('click', { bubbles: true })); // MouseEvent biasa: tidak punya pointerType
+    ok($('#donutLabel').textContent.startsWith('Pengeluaran'), 'klik mouse setelah diarahkan tidak membatalkan sorotan');
+    step('G. format rupiah untuk nilai negatif');
+    ok(w.eval('rupiah(-200000)') === '−Rp200.000' && w.eval('rupiah(1500)') === 'Rp1.500' && w.eval('rupiah(-0.4)') === 'Rp0', 'negatif: "−Rp200.000"; positif & mendekati nol tetap benar');
+    w.eval(`transactions = [{ id: 'z', createdAt: 1, type: 'expense', amount: 200000, categoryId: categoriesOf('expense')[0].id, date: monthKey(current) + '-01', note: '' }]; render();`);
+    ok($('#balance').textContent === '−Rp200.000', 'saldo bulan ini di Beranda: ' + $('#balance').textContent);
+    step('SELESAI');
+  } catch (e) { log.push('ERROR ' + e.stack); flush(); }
+};
+document.body.appendChild(f);
+</script>
