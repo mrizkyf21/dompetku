@@ -1,0 +1,122 @@
+<!doctype html><meta charset="utf-8"><pre id="out">RUNNING</pre>
+<script>
+// Uji sisi web untuk aplikasi Android (folder android/): jembatan window.DompetkuAndroid ditiru,
+// lalu dicek kunci aplikasi, simpan/bagikan file, tombol Kembali, warna bar, dan service worker.
+const log = [];
+const flush = () => { document.getElementById('out').textContent = log.join('\n'); };
+const ok = (cond, msg) => { log.push((cond ? 'PASS ' : 'FAIL ') + msg); flush(); };
+const step = (msg) => { log.push('.... ' + msg); flush(); };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+localStorage.clear();
+
+const calls = [];
+let lock = { enabled: false, available: true, reason: '' };
+// atob menghasilkan byte mentah; didekode sebagai UTF-8 agar sama dengan isi file aslinya
+const decode = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+window.mockBridge = {
+  saveFile(b64, name, mime) { calls.push({ fn: 'save', body: decode(b64), name, mime }); return true; },
+  shareFile(b64, name, mime, text) { calls.push({ fn: 'share', body: decode(b64), name, mime, text }); return true; },
+  setSystemBars(top, bottom) { calls.push({ fn: 'bars', top: top.trim(), bottom: bottom.trim() }); },
+  lockStatus() { return JSON.stringify(lock); },
+  requestLock(enable) { calls.push({ fn: 'lock', enable }); },
+};
+const last = (fn) => calls.filter((c) => c.fn === fn).pop();
+const count = (fn) => calls.filter((c) => c.fn === fn).length;
+
+function frame(html) {
+  return new Promise((resolve) => {
+    const f = document.createElement('iframe');
+    f.style.width = '400px'; f.style.height = '800px';
+    f.onload = () => { f.onload = null; resolve(f); };
+    f.srcdoc = html;
+    document.body.appendChild(f);
+  });
+}
+
+(async () => {
+  try {
+    const page = await (await fetch('../index.html')).text();
+    // <base> agar style.css/app.js terbaca; jembatan dipasang sebelum skrip aplikasi berjalan
+    const androidPage = page.replace('<head>', '<head><base href="/"><script>window.DompetkuAndroid = parent.mockBridge;<\/script>');
+    const f = await frame(androidPage);
+    const w = f.contentWindow, d = f.contentDocument, $ = (s) => d.querySelector(s);
+    const pressed = (v) => $(`#lockToggle [data-value=${v}]`).getAttribute('aria-pressed') === 'true';
+    await sleep(300);
+
+    step('A. service worker & warna bar sistem');
+    const regs = await w.navigator.serviceWorker.getRegistrations();
+    ok(regs.length === 0, 'service worker tidak didaftarkan di aplikasi Android');
+    const bars = last('bars');
+    ok(bars && bars.top.toLowerCase() === '#0f9d58' && bars.bottom.toLowerCase() === '#ffffff',
+      `warna bar dikirim: atas ${bars && bars.top}, bawah ${bars && bars.bottom}`);
+    w.eval('saveLook({ theme: "dark" })');
+    ok(last('bars').bottom.toLowerCase() === '#1b2128', 'tema gelap: warna bar bawah ikut berubah (' + last('bars').bottom + ')');
+    w.eval('saveLook({ theme: "auto" })');
+
+    step('B. kunci aplikasi: tampilan & aktifkan');
+    ok(!$('#securitySection').hidden, 'bagian Keamanan tampil di aplikasi Android');
+    ok(pressed('off') && !pressed('on'), 'status awal: Nonaktif');
+    ok(!$('#lockToggle [data-value=on]').disabled && $('#lockStatus').hidden, 'Aktif bisa dipilih, tanpa pesan peringatan');
+    $('#lockToggle [data-value=on]').click();
+    ok(last('lock') && last('lock').enable === true, 'ketuk Aktif meminta verifikasi ke Android');
+    ok($('#lockStatus').textContent.includes('Menunggu verifikasi'), 'pesan menunggu verifikasi tampil');
+    ok(pressed('off'), 'sebelum verifikasi berhasil, pilihan belum berubah');
+    lock.enabled = true;
+    w.dompetkuLockResult('Kunci aplikasi aktif');
+    ok(pressed('on') && $('#lockStatus').textContent === 'Kunci aplikasi aktif', 'setelah verifikasi: Aktif terpilih + pesan');
+    ok(!$('#toast').hidden && $('#toast').textContent === 'Kunci aplikasi aktif', 'toast hasil tampil');
+    const before = count('lock');
+    $('#lockToggle [data-value=on]').click();
+    ok(count('lock') === before, 'ketuk pilihan yang sudah aktif tidak meminta verifikasi lagi');
+
+    step('C. kunci aplikasi: dibatalkan, nonaktifkan, HP tanpa kunci layar');
+    $('#lockToggle [data-value=off]').click();
+    ok(last('lock').enable === false, 'ketuk Nonaktif meminta verifikasi');
+    w.dompetkuLockResult('Dibatalkan, pengaturan tidak berubah');
+    ok(pressed('on'), 'dibatalkan: tetap Aktif');
+    lock = { enabled: false, available: false, reason: 'Atur dulu kunci layar HP.' };
+    w.renderLock();
+    ok($('#lockToggle [data-value=on]').disabled, 'HP tanpa kunci layar: Aktif tidak bisa dipilih');
+    ok(!$('#lockStatus').hidden && $('#lockStatus').textContent === 'Atur dulu kunci layar HP.', 'alasan ditampilkan');
+    lock = { enabled: true, available: false, reason: 'Atur dulu kunci layar HP.' };
+    w.renderLock();
+    ok(!$('#lockToggle [data-value=off]').disabled, 'kunci yang sudah aktif tetap bisa dimatikan');
+    lock = { enabled: false, available: true, reason: '' };
+    d.dispatchEvent(new w.Event('visibilitychange'));
+    ok(!$('#lockToggle [data-value=on]').disabled && $('#lockStatus').hidden, 'kembali ke aplikasi: status diperbarui');
+
+    step('D. simpan & bagikan file lewat Android');
+    ok([...d.querySelectorAll('.share-btn')].every((b) => !b.hidden), 'tombol Kirim / Bagikan tampil');
+    w.eval(`transactions = [{ id: 't1', createdAt: 1, type: 'expense', amount: 25000, categoryId: categoriesOf('expense')[0].id, date: '2026-11-01', note: 'Kopi ☕ "susu"' }]; save(); render();`);
+    $('[data-action=csv-save]').click();
+    await sleep(200);
+    const saved = last('save');
+    ok(saved && /\.csv$/.test(saved.name) && saved.mime === 'text/csv', 'CSV disimpan: ' + (saved && saved.name));
+    ok(saved && saved.body.includes('"Tanggal";"Jenis"') && saved.body.includes('Kopi ☕ ""susu""'), 'isi CSV utuh (termasuk emoji)');
+    ok($('#toast').textContent.startsWith('Tersimpan di folder Download'), 'toast simpan tampil');
+    $('[data-action=backup-share]').click();
+    await sleep(200);
+    const shared = last('share');
+    ok(shared && /\.txt$/.test(shared.name) && shared.mime === 'text/plain', 'cadangan dibagikan sebagai .txt: ' + (shared && shared.name));
+    ok(shared && w.parseBackup(shared.body).txs.length === 1, 'isi cadangan bisa dipulihkan kembali');
+    window.mockBridge.saveFile = () => false;
+    $('[data-action=backup-save]').click();
+    await sleep(200);
+    ok($('#toast').textContent === 'Gagal menyimpan file', 'gagal menyimpan: pesan gagal tampil');
+
+    step('E. tombol Kembali HP');
+    $('#openCategories').click();
+    ok(d.querySelector('dialog[open]'), 'dialog kategori terbuka');
+    ok(w.dompetkuBack() === true && !d.querySelector('dialog[open]'), 'Kembali menutup dialog');
+    d.querySelector('[data-view=report]').click();
+    ok(w.dompetkuBack() === true && $('#view-home').classList.contains('active'), 'Kembali dari Laporan ke Beranda');
+    ok(w.dompetkuBack() === false, 'di Beranda: Kembali diteruskan ke Android (keluar aplikasi)');
+
+    step('F. versi web (tanpa aplikasi Android)');
+    const wf = await frame(page.replace('<head>', '<head><base href="/">'));
+    const wd = wf.contentDocument;
+    ok(wd.getElementById('securitySection').hidden, 'bagian Keamanan disembunyikan di versi web');
+    step('SELESAI');
+  } catch (e) { log.push('ERROR ' + e.stack); flush(); }
+})();
+</script>

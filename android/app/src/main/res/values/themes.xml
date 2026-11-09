@@ -1,0 +1,7 @@
+<resources>
+    <!-- Tema terang/gelap mengikuti HP; WebView memakai isLightTheme untuk prefers-color-scheme -->
+    <style name="Theme.Dompetku" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/page_bg</item>
+        <item name="android:colorAccent">@color/brand</item>
+    </style>
+</resources>

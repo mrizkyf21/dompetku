@@ -1,5 +1,5 @@
 // Naikkan versi ini setiap kali file aplikasi diubah agar HP mengunduh versi baru
-const CACHE = 'dompetku-v7';
+const CACHE = 'dompetku-v8';
 const FILES = [
   './',
   'index.html',

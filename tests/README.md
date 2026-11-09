@@ -16,6 +16,7 @@ Kebutuhan: Python 3 dan Google Chrome/Chromium.
 | `report-chat.test.html` | Kategori investasi, laporan & grafik donat, asisten keuangan (privasi, riwayat, kirim ulang) |
 | `look.test.html` | Pengaturan tampilan: tema, warna aksen & kontras, ukuran teks, kepadatan, sudut |
 | `bugs.test.html` | Bug yang pernah ditemukan, agar tidak muncul lagi |
+| `android.test.html` | Sisi web aplikasi Android (jembatan ditiru): kunci aplikasi, simpan/bagikan file, tombol Kembali, warna bar |
 
 Lain-lain:
 - `run.sh` menyajikan proyek di `http://localhost:8766` dengan profil Chrome sementara, lalu membaca

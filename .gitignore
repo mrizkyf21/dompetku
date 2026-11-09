@@ -1,0 +1,4 @@
+# Kunci tanda tangan Android: rahasia, jangan pernah di-commit
+*.jks
+*.keystore
+keystore.properties

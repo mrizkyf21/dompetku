@@ -99,6 +99,22 @@
 
     <!-- Pengaturan -->
     <section id="view-settings" class="view">
+      <div id="securitySection" hidden>
+        <h2>🔒 Keamanan</h2>
+        <div class="card stack">
+          <div class="look-group">
+            <span class="look-label" id="lockLabel">Kunci aplikasi (sidik jari / PIN HP)</span>
+            <div class="segmented" id="lockToggle" role="group" aria-labelledby="lockLabel">
+              <button type="button" data-value="off">🔓 Nonaktif</button>
+              <button type="button" data-value="on">🔒 Aktif</button>
+            </div>
+          </div>
+          <p class="note">Saat aktif, Dompetku meminta sidik jari atau PIN/pola layar HP setiap kali dibuka, dan lagi
+            setelah ditinggal lebih dari 1 menit. Mengubah pilihan ini juga perlu verifikasi.</p>
+          <p id="lockStatus" class="note" role="status" hidden></p>
+        </div>
+      </div>
+
       <h2>🎨 Tampilan</h2>
       <div class="card stack look">
         <div class="look-group">

@@ -1005,6 +1005,7 @@ function applyLook() {
   const vars = lookVars(look.accent);
   for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
   document.querySelector('meta[name="theme-color"]').content = look.accent;
+  syncAndroidBars();
   return vars;
 }
 
@@ -1090,6 +1091,7 @@ document.querySelectorAll('.bottombar button').forEach((btn) =>
 
 // Menu "Bagikan" HP (Gmail, WhatsApp, Drive, dll.) hanya tersedia di perangkat yang mendukung
 const canShareFiles = (() => {
+  if (window.DompetkuAndroid) return true;
   try {
     return !!navigator.canShare && navigator.canShare({ files: [new File([''], 'tes.txt', { type: 'text/plain' })] });
   } catch {
@@ -1098,7 +1100,21 @@ const canShareFiles = (() => {
 })();
 document.querySelectorAll('.share-btn').forEach((b) => { b.hidden = !canShareFiles; });
 
-function saveFile(blob, filename) {
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function saveFile(blob, filename) {
+  if (window.DompetkuAndroid) {
+    const ok = window.DompetkuAndroid.saveFile(await blobToBase64(blob), filename, blob.type || 'application/octet-stream');
+    toast(ok ? `Tersimpan di folder Download: ${filename}` : 'Gagal menyimpan file');
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = Object.assign(document.createElement('a'), { href: url, download: filename });
   document.body.appendChild(a);
@@ -1113,6 +1129,11 @@ async function shareFile(blob, filename, text) {
   const file = /\.(csv|txt)$/.test(filename)
     ? new File([blob], filename, { type: blob.type })
     : new File([blob], filename.replace(/\.\w+$/, '.txt'), { type: 'text/plain' });
+  if (window.DompetkuAndroid) {
+    const ok = window.DompetkuAndroid.shareFile(await blobToBase64(file), file.name, file.type || 'text/plain', text || '');
+    if (!ok) saveFile(blob, filename);
+    return;
+  }
   try {
     await navigator.share({ files: [file], title: filename, text });
   } catch (e) {
@@ -1198,7 +1219,8 @@ $('#clearAll').addEventListener('click', () => {
 
 // ---------- PWA ----------
 
-if ('serviceWorker' in navigator) {
+// Di aplikasi Android file sudah ada di HP, jadi service worker (cache offline) tidak diperlukan
+if ('serviceWorker' in navigator && !window.DompetkuAndroid) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
 }
 
@@ -1215,5 +1237,74 @@ $('#installBtn').addEventListener('click', async () => {
   installPrompt = null;
   $('#installBox').hidden = true;
 });
+
+// ---------- Aplikasi Android (WebView, folder android/) ----------
+
+// Warna status bar & navigation bar disamakan dengan bilah atas dan menu bawah
+function syncAndroidBars() {
+  if (!window.DompetkuAndroid) return;
+  const css = getComputedStyle(document.documentElement);
+  window.DompetkuAndroid.setSystemBars(css.getPropertyValue('--primary'), css.getPropertyValue('--surface'));
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncAndroidBars);
+syncAndroidBars();
+
+// Kunci aplikasi (sidik jari / PIN HP). Pengaturannya disimpan oleh aplikasi Android, bukan di localStorage,
+// agar bisa diperiksa sebelum halaman ditampilkan.
+const lockBridge = window.DompetkuAndroid && window.DompetkuAndroid.lockStatus ? window.DompetkuAndroid : null;
+
+function lockState() {
+  try {
+    return JSON.parse(lockBridge.lockStatus());
+  } catch {
+    return { enabled: false, available: false, reason: 'Status kunci tidak terbaca.' };
+  }
+}
+
+function renderLock(message = '') {
+  $('#securitySection').hidden = !lockBridge;
+  if (!lockBridge) return;
+  const state = lockState();
+  $('#lockToggle').querySelectorAll('button').forEach((b) => {
+    b.setAttribute('aria-pressed', String((b.dataset.value === 'on') === state.enabled));
+    // Saat HP belum punya kunci layar, kunci tidak bisa diaktifkan (tapi tetap bisa dimatikan)
+    b.disabled = b.dataset.value === 'on' && !state.available && !state.enabled;
+  });
+  const text = message || (state.available ? '' : state.reason);
+  $('#lockStatus').textContent = text;
+  $('#lockStatus').hidden = !text;
+}
+
+$('#lockToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || !lockBridge || btn.disabled) return;
+  const enable = btn.dataset.value === 'on';
+  if (enable === lockState().enabled) return;
+  renderLock('Menunggu verifikasi…');
+  lockBridge.requestLock(enable);
+});
+
+// Dipanggil aplikasi Android setelah verifikasi selesai (berhasil, gagal, atau dibatalkan)
+window.dompetkuLockResult = (message) => {
+  renderLock(message);
+  if (message) toast(message);
+};
+// Mis. setelah pengguna membuat kunci layar HP di Setelan lalu kembali ke aplikasi
+document.addEventListener('visibilitychange', () => { if (!document.hidden) renderLock(); });
+renderLock();
+
+// Tombol Kembali HP: tutup dialog yang terbuka, lalu kembali ke Beranda. false = biarkan aplikasi keluar
+window.dompetkuBack = () => {
+  const open = [...document.querySelectorAll('dialog[open]')].pop();
+  if (open) {
+    open.close();
+    return true;
+  }
+  if (!$('#view-home').classList.contains('active')) {
+    showView('home');
+    return true;
+  }
+  return false;
+};
 
 render();
